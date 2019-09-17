@@ -8,7 +8,7 @@
     function create_UUID() {
       var dt = new Date().getTime();
       var uuid = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
-      uuid.replace(/[xy]/g, function (c) {
+      uuid = uuid.replace(/[xy]/g, function (c) {
         var r = (dt + Math.random() * 16) % 16 | 0;
         dt = Math.floor(dt / 16);
         var hex = (c == "x" ? r : (r & 0x3 | 0x8));
@@ -61,14 +61,14 @@
      * @param {string} container The container in which the files are located
      * @param {Node~errorFirstCallback} cb - Returns an array of [{{name, link}}]
      */
-    function listFilesInContainer(container, cb){
+    function listFilesInContainer(directory, cb){
       $.ajax({
         method: "post",
         dataType: "json",
         contentType: "application/json",
         url: buildEndpointUrl("list"),
         data: JSON.stringify({
-          container: container
+          directory: directory
         }),
         success: function (response) {
           cb(null, response.links);
@@ -92,8 +92,7 @@
         contentType: "application/json",
         url: link,
         success: function (response) {
-          var tokenizedLink = response.uri + response.token;
-          cb(null, {tokenizedLink: tokenizedLink});
+          cb(null, {tokenizedLink: response.uri});
         },
         error: function (jqXHR, textStatus, errorThrown) {
           cb(new Error(jqXHR.responseText), null);
@@ -107,20 +106,20 @@
      * @param {File} file the file input containing the selected file
      * @param {Node~errorFirstCallback} cb returns the speed summary from the upload operation
      */
-    function uploadFile(container, file, cb) {
+    function uploadFile(directory, file, cb) {
       $.ajax({
         method: "post",
         dataType: "json",
         contentType: "application/json",
         url: buildEndpointUrl("getToken"),
         data: JSON.stringify({
-          container: container,
+          directory: directory,
           filename: file.name
         }),
         success: function (response) {
           var blobService = AzureStorage.Blob.createBlobServiceWithSas(response.baseUri, response.token);
-          var summary = blobService.createBlockBlobFromBrowserFile(container,
-            file.name,
+          var summary = blobService.createBlockBlobFromBrowserFile(response.container,
+            response.filename,
             file,
             function(error, result) {
               if(error) {
