@@ -26,7 +26,7 @@
    * File service supports file uploads via the WAM APIs via jQuery
    * and azure blob service via the azure-storage-blob.js client library
    * @param {string} baseUri The URI for the WAM API
-   * @returns {{listFilesInContainer: listFilesInContainer, uploadFile: uploadFile, getTokenizedFileLink: getTokenizedFileLink}}
+   * @returns {{listFilesInDirectory: listFilesInDirectory, uploadFile: uploadFile, getTokenizedFileLink: getTokenizedFileLink}}
    * Object containing available services
    */
   function createFileService(baseUri){
@@ -57,11 +57,11 @@
     }
 
     /**
-     * Get a listing of all the files in a container.
+     * Get a listing of all the files in a directory.
      * @param {string} container The container in which the files are located
      * @param {Node~errorFirstCallback} cb - Returns an array of [{{name, link}}]
      */
-    function listFilesInContainer(directory, cb){
+    function listFilesInDirectory(directory, cb){
       $.ajax({
         method: "post",
         dataType: "json",
@@ -71,7 +71,7 @@
           directory: directory
         }),
         success: function (response) {
-          cb(null, response.links);
+          cb(null, response);
         },
         error: function( jqXHR, textStatus, errorThrown){
           cb(new Error(jqXHR.responseText), null);
@@ -92,7 +92,7 @@
         contentType: "application/json",
         url: link,
         success: function (response) {
-          cb(null, {tokenizedLink: response.uri});
+          cb(null, {tokenizedLink: response.link});
         },
         error: function (jqXHR, textStatus, errorThrown) {
           cb(new Error(jqXHR.responseText), null);
@@ -117,9 +117,9 @@
           filename: file.name
         }),
         success: function (response) {
-          var blobService = AzureStorage.Blob.createBlobServiceWithSas(response.baseUri, response.token);
+          var blobService = AzureStorage.Blob.createBlobServiceWithSas(response.host, response.token);
           var summary = blobService.createBlockBlobFromBrowserFile(response.container,
-            response.filename,
+            response.filepath,
             file,
             function(error, result) {
               if(error) {
@@ -136,7 +136,7 @@
       });
     }
     return {
-      listFilesInContainer: listFilesInContainer,
+      listFilesInDirectory: listFilesInDirectory,
       getTokenizedFileLink: getTokenizedFileLink,
       uploadFile: uploadFile
     };
@@ -175,11 +175,11 @@ $(function (app) {
   }
 
   /**
-   * Adds the files in a container to the filelist element in the page
+   * Adds the files in a directory to the filelist element in the page
    */
-  function listFilesAndDirectories(){
-    var tempContainer = $("input[name='tempId']").val();
-    fileService.listFilesInContainer(tempContainer, function(err, data){
+  function updateUploadedFileList(){
+    var dir = $("input[name='tempId']").val() + "/";
+    fileService.listFilesInDirectory(dir, function(err, data){
       if(err){
         throw err;
       }
@@ -187,7 +187,7 @@ $(function (app) {
       var fileListDisplay = $("#filelist");
       fileListDisplay.empty();
       fileList.forEach(function(item, idx){
-        addFileDownloadElement("filelist", item.name, item.link);
+        addFileDownloadElement("filelist", item.displayName, item.link);
       });
     });
   }
@@ -219,13 +219,13 @@ $(function (app) {
   $("#upload").click(function () {
     var fileUploader = $("#fileupload");
     var file = fileUploader[0].files[0];
-    var tempContainer = $("input[name='tempId']").val();
-    fileService.uploadFile(tempContainer, file, function(err, data){
+    var directory = $("input[name='tempId']").val() + "/";
+    fileService.uploadFile(directory, file, function(err, data){
       if(err){
         throw err;
       }
       fileUploader.replaceWith(fileUploader.val("").clone(true));
-      listFilesAndDirectories();
+      updateUploadedFileList();
     });
   });
 }(app));
