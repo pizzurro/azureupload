@@ -26,22 +26,18 @@
    * File service supports file uploads via the WAM APIs via jQuery
    * and azure blob service via the azure-storage-blob.js client library
    * @param {string} baseUri The URI for the WAM API
-   * @returns {{listFilesInDirectory: listFilesInDirectory, uploadFile: uploadFile, getTokenizedFileLink: getTokenizedFileLink}}
-   * Object containing available services
+   * @returns {FileService}
+   * Object containing available services:
+   *    *  listFilesInDirectory
+   *    *  uploadFile
+   *    *  getDownloadLink
    */
   function createFileService(baseUri){
+    // References to wam api endpoints
     var endpoints = {
       list: "/api/DocumentStore/List",
       getToken: "/api/DocumentStore/Authorize"
     };
-
-    /**
-     * This is the signature for a standard node style error-first callback.
-     * @callback Node~errorFirstCallback
-     * @param {(null | Error)} err null if there was no error. JS Error if there was and error
-     * @param {*} response The data to be returned if successful
-     */
-
     /**
      * Private convenience service for use in building URI's
      * @param {string}endpointName key to use in looking up the relative path for the endpoint --
@@ -58,7 +54,7 @@
 
     /**
      * Get a listing of all the files in a directory.
-     * @param {string} container The container in which the files are located
+     * @param {string} directory The directory for which a listing is desired
      * @param {Node~errorFirstCallback} cb - Returns an array of [{{name, link}}]
      */
     function listFilesInDirectory(directory, cb){
@@ -83,16 +79,16 @@
      * Get a link that will allow the browser to download the desired file from Azure
      * @param {string} name The name of the file that is desired
      * @param {string} link The WAM API link that will return a limited use, tokenized download link
-     * @param {Node~errorFirstCallback} cb returns a single {{tokenizedLink}}
+     * @param {Node~errorFirstCallback} cb returns a single {{link}}. Link containing a token that will enable download
      */
-    function getTokenizedFileLink(name, link, cb) {
+    function getDownloadLink(name, link, cb) {
       $.ajax({
         method: "get",
         dataType: "json",
         contentType: "application/json",
         url: link,
         success: function (response) {
-          cb(null, {tokenizedLink: response.link});
+          cb(null, {link: response.link});
         },
         error: function (jqXHR, textStatus, errorThrown) {
           cb(new Error(jqXHR.responseText), null);
@@ -102,7 +98,7 @@
 
     /**
      * Contacts the WAM API to request
-     * @param {string} container the container where the file should be uploaded.
+     * @param {string} directory the directory where the file should be uploaded.
      * @param {File} file the file input containing the selected file
      * @param {Node~errorFirstCallback} cb returns the speed summary from the upload operation
      */
@@ -137,11 +133,14 @@
     }
     return {
       listFilesInDirectory: listFilesInDirectory,
-      getTokenizedFileLink: getTokenizedFileLink,
+      getDownloadLink: getDownloadLink,
       uploadFile: uploadFile
     };
   }
   var myApp = {};
+  //
+  // TODO: Inject the base url for the API
+  //
   myApp.wamFileService = createFileService("http://localhost:62435");
   myApp.utils = createUtils();
   return myApp;
@@ -153,12 +152,15 @@ $(function (app) {
 
   // This is the identifier for the service request. We will not know what the Work Order Id is until we
   // get a response from Maximo
+  //
+  // TODO: Inject this from the work order controller
+  //
   $("input[name='tempId']").val(app.utils.createUuid());
 
   /**
    * Updates a container with a button and label.  When clicked the button will call getFile to download it.
    * @param {string} id the element that will contain the file list
-   * @param [string} name the label for the file -- most likely the file nanme
+   * @param [string} name the label for the file -- most likely the file name
    * @param {string} link the link that will be used to acquire a token for the file
    */
   function addFileDownloadElement(id, name, link){
@@ -178,6 +180,9 @@ $(function (app) {
    * Adds the files in a directory to the filelist element in the page
    */
   function updateUploadedFileList(){
+    //
+    // TODO: Find a better way to grab the id.  This will align to a subdirectory in Azure
+    //
     var dir = $("input[name='tempId']").val() + "/";
     fileService.listFilesInDirectory(dir, function(err, data){
       if(err){
@@ -199,11 +204,11 @@ $(function (app) {
    * @param {string} link the link to the WAM Api that will provide a link that may be used in the client browser
    */
   function getFile(name, link){
-    fileService.getTokenizedFileLink(name, link, function(err, data){
+    fileService.getDownloadLink(name, link, function(err, data){
       if(err){
         throw err;
       }
-      var uri = data.tokenizedLink;
+      var uri = data.link;
       var a = document.createElement("a");
       a.download = name;
       a.href = uri;
@@ -219,6 +224,9 @@ $(function (app) {
   $("#upload").click(function () {
     var fileUploader = $("#fileupload");
     var file = fileUploader[0].files[0];
+    //
+    // TODO: find a better way to retrieve the id
+    //
     var directory = $("input[name='tempId']").val() + "/";
     fileService.uploadFile(directory, file, function(err, data){
       if(err){
